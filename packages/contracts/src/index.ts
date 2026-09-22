@@ -40,6 +40,9 @@ export type ColorChangeType = (typeof colorChangeTypes)[number];
 export const attachmentOwnerTypes = ["BATCH", "COLOR_CHANGE", "PROJECT", "CONSUMPTION"] as const;
 export type AttachmentOwnerType = (typeof attachmentOwnerTypes)[number];
 
+export const attachmentIntegrityStatuses = ["OK", "HASH_MISMATCH", "FILE_MISSING", "OWNER_MISSING", "ORPHAN_FILE"] as const;
+export type AttachmentIntegrityStatus = (typeof attachmentIntegrityStatuses)[number];
+
 export const unitFamilies = {
   g: { family: "MASS", base: "g", factor: "1" },
   kg: { family: "MASS", base: "g", factor: "1000" },

@@ -138,3 +138,63 @@ export const movementLabels: Record<string, string> = {
   ADJUSTMENT_OUT: "盘减",
   REVERSAL: "撤销恢复"
 };
+
+export type AttachmentIntegrityStatus = "OK" | "HASH_MISMATCH" | "FILE_MISSING" | "OWNER_MISSING" | "ORPHAN_FILE";
+
+export type AttachmentIntegrityEntry = {
+  storageKey: string;
+  attachmentId: string | null;
+  recordPresent: boolean;
+  filePresent: boolean;
+  ownerType: string | null;
+  ownerId: string | null;
+  ownerPresent: boolean | null;
+  expectedSha256: string | null;
+  expectedByteSize: string | null;
+  actualSha256: string | null;
+  actualByteSize: string | null;
+  status: AttachmentIntegrityStatus;
+  firstSeenAt: string;
+  lastScannedAt: string;
+  statusChangedAt: string;
+};
+
+export type AttachmentIntegritySummary = {
+  totalEntries: number;
+  statusCounts: Record<AttachmentIntegrityStatus, number>;
+  lastScannedAt: string | null;
+};
+
+export type AttachmentIntegrityScanResult = {
+  recordsScanned: number;
+  filesScanned: number;
+  transientFilesSkipped: number;
+  invalidKeysSkipped: number;
+  entriesWritten: number;
+  entriesRemoved: number;
+  statusCounts: Record<AttachmentIntegrityStatus, number>;
+  scannedAt: string;
+};
+
+export const integrityStatusLabels: Record<AttachmentIntegrityStatus, string> = {
+  OK: "正常",
+  HASH_MISMATCH: "哈希冲突",
+  FILE_MISSING: "文件缺失",
+  OWNER_MISSING: "归属缺失",
+  ORPHAN_FILE: "孤立文件"
+};
+
+export const integrityStatusTagTypes: Record<AttachmentIntegrityStatus, "success" | "danger" | "warning" | "info"> = {
+  OK: "success",
+  HASH_MISMATCH: "danger",
+  FILE_MISSING: "danger",
+  OWNER_MISSING: "warning",
+  ORPHAN_FILE: "warning"
+};
+
+export const ownerTypeLabels: Record<string, string> = {
+  BATCH: "批次",
+  COLOR_CHANGE: "颜色变化",
+  PROJECT: "项目",
+  CONSUMPTION: "消耗"
+};

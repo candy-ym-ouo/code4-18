@@ -241,3 +241,40 @@
 - `file`
 
 支持 JPEG、PNG、WebP，默认最大 10 MB。
+
+## 10. 附件完整性索引
+
+完整性索引是独立的只读校验层：扫描附件记录、磁盘文件和归属关系，把结果写入 `attachment_integrity_index` 表。扫描绝不修改附件记录或文件，缺失与冲突只标记、不修复。
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| POST | `/attachment-integrity/reindex` | 全量重新索引（幂等），返回本次扫描摘要 |
+| GET | `/attachment-integrity/summary` | 当前索引状态计数与最近扫描时间 |
+| GET | `/attachment-integrity/entries` | 索引条目，支持 `status` 过滤与分页 |
+
+条目状态：
+
+- `OK`：记录、文件、哈希和归属全部一致。
+- `HASH_MISMATCH`：文件内容与上传时记录的 SHA-256 不一致（冲突）。索引同时保留期望哈希与实际哈希，不会用新内容覆盖记录。
+- `FILE_MISSING`：附件记录存在但磁盘文件缺失。条目保留期望哈希，不会被移除。
+- `OWNER_MISSING`：归属的业务记录（批次、项目等）已不存在。
+- `ORPHAN_FILE`：磁盘文件没有对应的附件记录（孤立文件）。上传暂存（`*.tmp`）与删除中转（`*.deleting-*`）文件不计入。
+
+重新索引幂等：以 `storage_key` 为唯一键 upsert，相同系统状态下重复扫描结果一致；`firstSeenAt` 与 `statusChangedAt` 只在状态变化时推进。记录与文件都已消失的条目才会从索引移除。每次重新索引都会写入审计日志（`REINDEX`）。
+
+重新索引响应：
+
+```json
+{
+  "data": {
+    "recordsScanned": 12,
+    "filesScanned": 12,
+    "transientFilesSkipped": 0,
+    "invalidKeysSkipped": 0,
+    "entriesWritten": 12,
+    "entriesRemoved": 1,
+    "statusCounts": { "OK": 11, "HASH_MISMATCH": 0, "FILE_MISSING": 1, "OWNER_MISSING": 0, "ORPHAN_FILE": 0 },
+    "scannedAt": "2026-09-22T08:00:00.000Z"
+  }
+}
+```

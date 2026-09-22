@@ -155,11 +155,37 @@ assert(afterReversal.data.movements[0].type === "REVERSAL", "Reversal movement w
 const search = await call(`/materials?${new URLSearchParams({ q: `Smoke Material ${suffix}`, craftType: "GENERAL", color: "Smoke Brown", stockState: "in_stock" })}`);
 assert(search.meta.total >= 1, "Material search did not find the smoke-test material");
 
+// 附件完整性索引：上传 -> 两次索引幂等 -> 删除后索引收敛，不产生孤立文件。
+const png1x1 = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==", "base64");
+const uploadForm = new FormData();
+uploadForm.append("ownerType", "BATCH");
+uploadForm.append("ownerId", batch.id);
+uploadForm.append("file", new Blob([png1x1], { type: "image/png" }), `smoke-${suffix}.png`);
+const attachment = await call("/attachments", { method: "POST", body: uploadForm });
+
+const firstScan = await call("/attachment-integrity/reindex", { method: "POST" });
+const secondScan = await call("/attachment-integrity/reindex", { method: "POST" });
+assert(JSON.stringify(firstScan.data.statusCounts) === JSON.stringify(secondScan.data.statusCounts), "Repeated reindex changed integrity status counts");
+assert(secondScan.data.entriesRemoved === 0, "Idempotent reindex removed entries on a quiet system");
+assert(secondScan.data.statusCounts.OK >= 1, "Integrity scan did not index the uploaded attachment");
+
+const okEntries = await call("/attachment-integrity/entries?status=OK&pageSize=100");
+assert(okEntries.data.some((entry) => entry.attachmentId === attachment.data.id), "Uploaded attachment is missing from OK integrity entries");
+const integritySummary = await call("/attachment-integrity/summary");
+assert(JSON.stringify(integritySummary.data.statusCounts) === JSON.stringify(secondScan.data.statusCounts), "Integrity summary does not match the last scan");
+
+await call(`/attachments/${attachment.data.id}`, { method: "DELETE" });
+const afterDeleteScan = await call("/attachment-integrity/reindex", { method: "POST" });
+assert(afterDeleteScan.data.entriesRemoved === 1, "Deleting an attachment should retire exactly one integrity entry");
+assert(afterDeleteScan.data.statusCounts.OK === secondScan.data.statusCounts.OK - 1, "Integrity OK count did not drop after attachment deletion");
+assert(afterDeleteScan.data.statusCounts.ORPHAN_FILE === secondScan.data.statusCounts.ORPHAN_FILE, "Clean attachment deletion produced an orphan file");
+
 console.log(JSON.stringify({
   result: "PASS",
   sourceId: source.data.id,
   materialId: material.data.id,
   batchId: batch.id,
   projectId: project.data.id,
-  consumptionId: consumption.id
+  consumptionId: consumption.id,
+  attachmentIntegrity: afterDeleteScan.data.statusCounts
 }, null, 2));
