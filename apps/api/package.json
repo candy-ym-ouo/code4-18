@@ -9,7 +9,8 @@
     "start": "node dist/server.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
-    "db:migrate": "tsx src/migrate.ts"
+    "db:migrate": "tsx src/migrate.ts",
+    "attachments:reindex": "tsx src/scripts/reindexAttachments.ts"
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.2",

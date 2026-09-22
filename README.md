@@ -16,6 +16,7 @@
 - 颜色变化时间线和批次当前颜色。
 - 材料、批次、来源、颜色、库存状态和位置搜索筛选。
 - 受保护图片附件。
+- 附件完整性索引：哈希/大小、所有者引用校验和孤立文件扫描，重索引幂等。
 - CSV、完整工作区 JSON 导出。
 - 仪表盘、审计日志和健康检查。
 - PostgreSQL 数据持久化和本地附件文件存储。
@@ -103,6 +104,9 @@ node ops/smoke-test.mjs
 - 数量使用 PostgreSQL `numeric(18,6)`，API 使用十进制字符串。
 - 归档代替核心数据硬删除。
 - 审计日志只追加，不更新、不删除。
+- 附件基线哈希、大小和存储键在上传事务中建立；重索引只记录观测结果，
+  哈希或大小冲突只报告不替换，缺失或孤立对象不会被静默处理。
+- 附件重索引使用 advisory lock 串行化，可重复执行且结果幂等。
 
 ## 文档
 
@@ -114,4 +118,6 @@ node ops/smoke-test.mjs
 - 使用 `openssl rand -hex 32` 生成 `SESSION_SECRET`。
 - 生产环境设置 `COOKIE_SECURE=true` 并使用 HTTPS。
 - 定期备份 PostgreSQL 数据库和 `UPLOAD_DIR` 附件目录，并验证备份可恢复。
+- 备份恢复或迁移附件后执行 `pnpm --filter @handcraft/api attachments:reindex`
+  （加 `--strict` 可在发现缺失、冲突或孤立文件时以非零退出码告警）。
 - 不要将 `.env`、备份文件或上传目录提交到版本控制。

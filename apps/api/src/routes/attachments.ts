@@ -8,6 +8,7 @@ import type { AuthenticatedRequest } from "../lib/auth.js";
 import { pool, withTransaction } from "../lib/db.js";
 import { AppError } from "../lib/errors.js";
 import { writeAudit } from "../lib/audit.js";
+import { resolveStoragePath } from "../lib/attachmentFiles.js";
 import { config } from "../config.js";
 
 const mimeExtensions: Record<string, string> = {
@@ -30,14 +31,7 @@ function hasExpectedMagic(buffer: Buffer, mime: string): boolean {
   return false;
 }
 
-function uploadPath(storageKey: string): string {
-  const root = path.resolve(config.UPLOAD_DIR);
-  const resolved = path.resolve(root, storageKey);
-  if (resolved !== root && !resolved.startsWith(`${root}${path.sep}`)) {
-    throw new AppError(400, "INVALID_STORAGE_KEY", "附件存储路径无效");
-  }
-  return resolved;
-}
+const uploadPath = resolveStoragePath;
 
 export async function attachmentRoutes(app: FastifyInstance): Promise<void> {
   app.post("/attachments", async (request, reply) => {
@@ -94,6 +88,14 @@ export async function attachmentRoutes(app: FastifyInstance): Promise<void> {
            RETURNING id, owner_type AS "ownerType", owner_id AS "ownerId", original_name AS "originalName",
                      mime_type AS "mimeType", byte_size::text AS "byteSize", sha256, created_at AS "createdAt"`,
           [ownerType, fields.ownerId, originalName, storageKey, filePart.mimetype, filePart.buffer.length, sha256]
+        );
+        // 上传路径已经写入并校验过文件，索引基线随附件在同一事务建立；
+        // 若事务失败外层会删除磁盘文件，不会留下无引用的孤立文件。
+        await client.query(
+          `INSERT INTO attachment_index
+             (attachment_id, status, observed_sha256, observed_byte_size, read_error, indexed_at, verified_at)
+           VALUES ($1, 'OK', $2, $3, NULL, now(), now())`,
+          [result.rows[0]?.id, sha256, filePart.buffer.length]
         );
         await writeAudit(client, {
           actorUserId: user.id, action: "UPLOAD", entityType: "ATTACHMENT", entityId: result.rows[0]?.id,
